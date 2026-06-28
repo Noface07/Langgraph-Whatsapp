@@ -1,52 +1,78 @@
-# LangGraph WhatsApp Agent
+# LangGraph WhatsApp AI Assistant 🤖📱
 
-A template for building WhatsApp agents using LangGraph and Twilio. This project enables you to deploy AI agents that interact with users via WhatsApp, process messages and images, and invoke custom graph-based agents hosted on the LangGraph Platform.
+A highly resilient, privacy-first, and fully autonomous WhatsApp AI Assistant powered by **LangGraph**, local LLMs (**Ollama**), and **WAHA (WhatsApp HTTP API)**.
 
-It provides a foundation for building scalable, secure, and maintainable AI agent services.
+Unlike standard chatbots, this agent acts as a true personal assistant. It intelligently filters messages, silently summarizes group chats, remembers past conversations, analyzes images, and can be completely controlled remotely from your own WhatsApp.
 
-Fork this repo and iterate to create your production-ready solution.
+---
 
-![Architecture Diagram](./docs/app_architecture_v0.1.0.png)
+## 🌟 Key Features
 
-## Features
+* **🧠 Persistent Memory**: Uses `langgraph-checkpoint-sqlite` to maintain long-term conversation history for every individual contact.
+* **👁️ Vision & Multimodality**: Built-in support for `qwen3.5-vision` (via Ollama). Send an image to your WhatsApp, and the AI will download the media, analyze it, and reply intelligently.
+* **🛡️ Smart Group Chat Handling**: The agent recognizes group chats. It will silently log the contents for your reference but is strictly programmed *never* to embarrass you by auto-replying in groups.
+* **📱 Remote WhatsApp Control**: Control your server directly from your phone! Text yourself special commands:
+  * `AI_OFF` - Instantly pauses the AI.
+  * `AI_ON` - Resumes AI operation.
+  * `AI_LOG` - Generates and sends you a chronological, date-wise summary of everything the bot handled while you were away.
+  * `AI_DEL` - Forcefully wipes the SQLite memory database for a clean slate.
+* **🔁 Bulletproof Resilience**:
+  * **LangGraph Retries**: If the local LLM hallucinates or gets stuck in a logic loop, LangGraph gracefully intercepts the `GraphRecursionError` and auto-retries.
+  * **Session Auto-Restart**: If the OpenWA/WAHA connection drops, the bot automatically pings the WAHA API to jumpstart the session and seamlessly retries sending the message.
+* **🔒 100% Local & Private**: All AI processing runs completely locally on your hardware via Ollama. No data is sent to OpenAI or third-party cloud providers.
 
-- Create custom LangGraph-powered agents for WhatsApp
-- Support for multi-agents with supervisor-based architecture
-- Integration with Model Context Protocol (MCP) servers (Supermemory, Sapier, etc.)
-- Support for image processing and multimodal interactions
-- Persistent conversation state across messages
-- Request validation for security
-- Comprehensive observability via LangSmith
-- Easy deployment with LangGraph Platform
+---
 
-## Stack
+## 🏗️ Architecture
 
-- **WhatsApp Integration**: Twilio API for messaging and multimedia handling
-- **Agent Framework**: LangGraph (by LangChain) as the MCP client and multi-agent system using langgraph_supervisor
-- **Models**: Supports Google Gemini, OpenAI GPT models, and more
-- **MCP Servers**:
-  Using langchain-mcp-adapters
-  - Supermemory
-  - Zapier for access to thousands of apps and integrations (Google, Slack, Spotify, etc.)
-- **Observability**: Complete tracing with LangSmith
-- **Deployment**: LangGraph Platform for simplified production hosting
+1. **WAHA (WhatsApp HTTP API)**: Provides the bridge to WhatsApp. Listens to incoming webhooks and handles outgoing messages.
+2. **FastAPI**: Acts as the fast, asynchronous webhook receiver for WAHA.
+3. **LangGraph**: The core brain. Acts as a supervisor agent that routes messages, decides when to use tools (like logging), and maintains state.
+4. **Ollama**: Local inference engine for fast, private AI processing.
+5. **SQLite**: Persistent database checkpointer for LangGraph memory.
 
-## Prerequisites
+---
 
-- Twilio account with WhatsApp integration
-- API key for LLM access (OpenAI, Google, etc.)
-- LangGraph Platform access
-- (Optional) MCP server configurations
+## 🚀 Quick Start
 
-## Getting Started
+### 1. Prerequisites
+- **Python 3.10+**
+- **Ollama** installed and running locally with your model of choice (e.g., `qwen3.5-vision:latest`).
+- **WAHA / OpenWA** instance running (usually via Docker).
 
-1. Fork this repository to start your own project
-2. Build your agent using the template structure
-3. Deploy to LangGraph Platform
-![Langggraph Platform](./docs/langgraph-platform_config.png)
-4. Configure Twilio webhook to point to your LangGraph deployment URL (/whatsapp)
-![Twilio](./docs/twilio_config.png)
+### 2. Installation
 
-## License
+Clone the repository and install the required dependencies using `uv` (or pip):
 
-This project is licensed under the terms included in the LICENSE file.
+```bash
+git clone https://github.com/<YOUR_USERNAME>/langgraph-whatsapp-agent.git
+cd langgraph-whatsapp-agent
+uv sync
+```
+
+### 3. Configuration
+Copy the example environment file and fill in your details:
+```bash
+cp .env.example .env
+```
+Ensure your `.env` contains the correct `OPENWA_API_URL` and `OPENWA_SESSION_ID`.
+
+### 4. Running the Agent
+Start the FastAPI webhook server:
+```bash
+python -m src.langgraph_whatsapp.server
+```
+
+*(Alternatively, use the provided `run.bat` or `start.bat` scripts if you are on Windows).*
+
+---
+
+## 🛠️ Modifying the Prompt
+
+You can customize the bot's personality by editing `src/agents/base/prompt.py`. By default, it is configured to act extremely casually, never announce itself as an AI, and handle messages exactly like a human taking notes for you while you are busy.
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License - see the `src/LICENSE` file for details.
