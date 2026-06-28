@@ -177,12 +177,10 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
 
         # Check Bot State before processing incoming messages
         import os
+        state = "on"
         if os.path.exists(".bot_state"):
             with open(".bot_state", "r") as f:
                 state = f.read().strip()
-                if state == "off":
-                    LOGGER.info("Bot is OFF. Ignoring message.")
-                    return "ok"
 
         if not sender:
             raise HTTPException(400, detail="Missing 'from' in request payload")
@@ -246,6 +244,9 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
         if document_text:
             user_message_text += f"\n\n[ATTACHED DOCUMENT TEXT]:\n{document_text}"
 
+        if state == "off":
+            user_message_text += "\n\n[SYSTEM INSTRUCTION]: The bot is currently PAUSED. You are in SILENT LISTENER mode. DO NOT use google_calendar or web_search tools. Your ONLY job is to use the log_activity tool to record this."
+
         input_data = {
             "id": sender,
             "user_message": user_message_text,
@@ -262,9 +263,9 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
             LOGGER.error(f"Error invoking LangGraph agent: {e}", exc_info=True)
             return "error"
 
-        # If it was a group message, we process/log it but NEVER send a reply back.
-        if is_group:
-            LOGGER.info(f"Processed group message from {sender}. No reply will be sent.")
+        # If it was a group message, or the bot is OFF, we process/log it but NEVER send a reply back.
+        if is_group or state == "off":
+            LOGGER.info(f"Processed message from {sender} (Group: {is_group}, State: {state}). No reply will be sent.")
             return "ok"
 
         # Send reply back via OpenWA API asynchronously
