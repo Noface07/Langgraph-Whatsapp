@@ -55,7 +55,7 @@ class Agent:
             thread_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, id))
             run_config = {
                 "configurable": {"thread_id": thread_id, **self.graph_config},
-                "recursion_limit": 25
+                "recursion_limit": 5
             }
             
             # Import build_agent here to avoid circular imports if any
@@ -65,22 +65,20 @@ class Agent:
             async with build_agent() as graph:
                 max_retries = 3
                 for attempt in range(max_retries):
-                    try:
-                        final_state = await graph.ainvoke(input_dict, config=run_config)
-                        
-                        if "messages" in final_state and len(final_state["messages"]) > 0:
-                            last_msg = final_state["messages"][-1]
-                            if hasattr(last_msg, "content"):
-                                return last_msg.content
-                            elif isinstance(last_msg, dict) and "content" in last_msg:
-                                return last_msg["content"]
-                        
-                        return str(final_state)
-                    except GraphRecursionError:
-                        LOGGER.warning(f"GraphRecursionError on attempt {attempt + 1}. Retrying...")
-                        if attempt == max_retries - 1:
-                            LOGGER.error("Max retries reached for GraphRecursionError. Falling back.")
-                            return "Sorry, my brain got a bit tangled up processing that! Could you try asking me in a different way?"
+                try:
+                    final_state = await graph.ainvoke(input_dict, config=run_config)
+                    
+                    if "messages" in final_state and len(final_state["messages"]) > 0:
+                        last_msg = final_state["messages"][-1]
+                        if hasattr(last_msg, "content"):
+                            return last_msg.content
+                        elif isinstance(last_msg, dict) and "content" in last_msg:
+                            return last_msg["content"]
+                    
+                    return str(final_state)
+                except GraphRecursionError:
+                    LOGGER.error("GraphRecursionError caught! The AI got stuck in a loop. Falling back immediately.")
+                    return "Sorry, my brain got a bit tangled up processing that! Could you try asking me in a different way?"
         except Exception as e:
             LOGGER.error(f"Error during invoke: {str(e)}", exc_info=True)
-            return "Oops, I encountered a minor internal error while thinking about that!"
+            return "Oops, I encountered a minor internal error while thinking about that!"
