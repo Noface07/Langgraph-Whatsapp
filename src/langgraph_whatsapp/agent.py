@@ -63,8 +63,6 @@ class Agent:
             from langgraph.errors import GraphRecursionError
             
             async with build_agent() as graph:
-                max_retries = 3
-                for attempt in range(max_retries):
                 try:
                     final_state = await graph.ainvoke(input_dict, config=run_config)
                     

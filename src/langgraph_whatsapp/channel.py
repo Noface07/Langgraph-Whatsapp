@@ -66,7 +66,30 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
         try:
             start_resp = await client.post(start_url, headers=headers, timeout=30.0)
             if start_resp.status_code in [200, 201]:
-                LOGGER.info("Session restarted successfully. Retrying message send...")
+                LOGGER.info("Session restarted successfully. Waiting for WhatsApp client to connect (this may take a few seconds)...")
+                
+                import asyncio
+                is_connected = False
+                for _ in range(15):
+                    await asyncio.sleep(2.0)
+                    status_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}"
+                    try:
+                        status_resp = await client.get(status_url, headers=headers, timeout=5.0)
+                        if status_resp.status_code == 200:
+                            status_data = status_resp.json()
+                            status_str = status_data.get("status", "").upper()
+                            if status_str not in ["STARTING", "STOPPED", "FAILED", "DISCONNECTED"]:
+                                # Usually 'WORKING', 'CONNECTED', or 'AUTHENTICATED'
+                                is_connected = True
+                                break
+                    except Exception as e:
+                        LOGGER.warning(f"Failed to poll status: {e}")
+                
+                if not is_connected:
+                    LOGGER.error("WhatsApp client did not connect in time after restart. Aborting retry.")
+                    return
+                    
+                LOGGER.info("WhatsApp client is ready! Retrying message send...")
                 retry_resp = await client.post(send_url, json=send_payload, headers=headers, timeout=30.0)
                 if retry_resp.status_code >= 400:
                     LOGGER.error(f"Failed to send OpenWA message after session restart: {retry_resp.status_code} {retry_resp.text}")
@@ -189,15 +212,17 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
         images = []
         document_text = ""
         if msg_data.get("hasMedia") or msg_data.get("type") in ["image", "document"]:
-            msg_id = msg_data.get("id")
-            if isinstance(msg_id, dict):
-                msg_id = msg_id.get("id", msg_id)
+            media_url = None
+            if "media" in msg_data and isinstance(msg_data["media"], dict):
+                media_url = msg_data["media"].get("url")
             
-            media_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}/messages/{msg_id}/download"
-            headers = {"X-API-Key": OPENWA_API_KEY}
-            try:
-                async with httpx.AsyncClient() as client:
-                    media_resp = await client.get(media_url, headers=headers, timeout=30.0)
+            if not media_url:
+                LOGGER.warning("Message has media but no media.url was provided in the webhook payload.")
+            else:
+                headers = {"X-API-Key": OPENWA_API_KEY}
+                try:
+                    async with httpx.AsyncClient() as client:
+                        media_resp = await client.get(media_url, headers=headers, timeout=30.0)
                     if media_resp.status_code == 200:
                         content_type = media_resp.headers.get("Content-Type", "")
                         
