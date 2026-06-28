@@ -29,6 +29,7 @@ async def get_summary() -> str:
     Please provide a concise 2-3 paragraph summary of the following log. 
     Crucially, organize and order the summary DATE-WISE so Yuvraj can easily see what happened chronologically.
     Identify people by their names as listed in the log. Do not use generic terms like "the user" when referring to the person who sent the message. 
+    CRITICAL RULE: DO NOT assume relationships, events, or ownership. If the log says "Happy anniversary Raju and Asha", do NOT summarize it as Yuvraj's anniversary or Yuvraj's spouse. Only state exactly what is written.
     Keep it easy to read and focus on the most important messages or events.
     
     Here is the raw log data:

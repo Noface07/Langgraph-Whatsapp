@@ -44,10 +44,9 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
 
     async def _restart_session_and_retry(self, client, headers, send_url, send_payload, chat_id):
         LOGGER.info("Attempting to restart the OpenWA session as a fallback...")
-        start_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/start"
-        start_payload = {"name": OPENWA_SESSION_ID}
+        start_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}/start"
         try:
-            start_resp = await client.post(start_url, json=start_payload, headers=headers, timeout=30.0)
+            start_resp = await client.post(start_url, headers=headers, timeout=30.0)
             if start_resp.status_code in [200, 201]:
                 LOGGER.info("Session restarted successfully. Retrying message send...")
                 retry_resp = await client.post(send_url, json=send_payload, headers=headers, timeout=30.0)
