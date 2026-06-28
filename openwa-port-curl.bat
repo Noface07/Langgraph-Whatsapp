@@ -1,0 +1,1 @@
+curl -X POST http://localhost:2785/api/sessions/lang-graph/webhooks -H "Content-Type: application/json" -H "X-API-Key: owa_k1_a04242a34af961e93d0f2162fec207dd5aecc3cd809fd12580a2a6e191ceb88b" -d "{\"url\": \"http://127.0.0.1:8081/whatsapp\", \"events\": [\"message.received\"]}"
