@@ -247,8 +247,8 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
                                 LOGGER.warning(f"Unsupported document type: {content_type}")
                     else:
                         LOGGER.warning(f"Failed to download media: {media_resp.status_code}")
-            except Exception as e:
-                LOGGER.error(f"Error downloading media: {e}")
+                except Exception as e:
+                    LOGGER.error(f"Error downloading media: {e}")
 
         # Assemble payload for the LangGraph agent
         contact_info = msg_data.get("contact", {})
