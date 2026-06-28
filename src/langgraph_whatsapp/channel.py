@@ -44,7 +44,25 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
 
     async def _restart_session_and_retry(self, client, headers, send_url, send_payload, chat_id):
         LOGGER.info("Attempting to restart the OpenWA session as a fallback...")
+        
+        health_url = f"{OPENWA_API_URL.rstrip('/')}/health"
+        try:
+            health_resp = await client.get(health_url, timeout=10.0)
+            if health_resp.status_code != 200:
+                LOGGER.error(f"WAHA Engine is DOWN. Health check failed: {health_resp.status_code}. Aborting restart.")
+                return
+        except Exception as e:
+            LOGGER.error(f"Failed to reach WAHA Health API: {e}. Aborting restart.")
+            return
+
+        stop_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}/stop"
         start_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}/start"
+        
+        try:
+            await client.post(stop_url, headers=headers, timeout=10.0)
+        except Exception:
+            pass
+            
         try:
             start_resp = await client.post(start_url, headers=headers, timeout=30.0)
             if start_resp.status_code in [200, 201]:
@@ -54,10 +72,36 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
                     LOGGER.error(f"Failed to send OpenWA message after session restart: {retry_resp.status_code} {retry_resp.text}")
                 else:
                     LOGGER.info(f"Successfully sent reply to {chat_id} after session restart")
+            elif start_resp.status_code == 400 and "already started" in start_resp.text.lower():
+                LOGGER.info("Session was already started, no need to restart.")
             else:
                 LOGGER.error(f"Failed to restart session: {start_resp.status_code} {start_resp.text}")
         except Exception as e:
             LOGGER.error(f"Error during session restart fallback: {e}")
+
+    async def force_restart_session(self):
+        import httpx
+        LOGGER.info("Proactively restarting the OpenWA session...")
+        headers = {"X-API-Key": OPENWA_API_KEY}
+        async with httpx.AsyncClient() as client:
+            stop_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}/stop"
+            start_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}/start"
+            
+            try:
+                await client.post(stop_url, headers=headers, timeout=10.0)
+            except Exception:
+                pass
+                
+            try:
+                start_resp = await client.post(start_url, headers=headers, timeout=30.0)
+                if start_resp.status_code in [200, 201]:
+                    LOGGER.info("Successfully restarted OpenWA session proactively!")
+                elif start_resp.status_code == 400 and "already started" in start_resp.text.lower():
+                    LOGGER.info("OpenWA session is already started.")
+                else:
+                    LOGGER.error(f"Failed to restart OpenWA session. Status: {start_resp.status_code}")
+            except Exception as e:
+                LOGGER.error(f"Error during proactive restart request: {e}")
 
     async def handle_message(self, payload: dict) -> str:
 
@@ -104,18 +148,24 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
                 reply_to = msg_data.get("to") or sender
                 await self._send_text(reply_to, reply_msg)
                 return "ok"
-            elif text == "AI_LOG":
-                from summarize_log import get_summary
-                summary = await get_summary()
-                reply_to = msg_data.get("to") or sender
-                await self._send_text(reply_to, f"Here is your date-wise summary:\n\n{summary}")
+            elif text.startswith("AI_LOG"):
+                parts = content.strip().split(" ", 1)
+                log_cmd = parts[0].upper()
+                query_str = parts[1] if len(parts) > 1 else None
                 
-                # Send raw logs as well
-                if os.path.exists("whatsapp_activity_log.md"):
-                    with open("whatsapp_activity_log.md", "r", encoding="utf-8") as f:
-                        logs = f.read()
-                        if logs:
-                            await self._send_text(reply_to, f"Raw Logs:\n\n{logs}")
+                date_str = None
+                if log_cmd.startswith("AI_LOG_") and len(log_cmd) == 15: # AI_LOG_DDMMYYYY
+                    date_part = log_cmd[7:]
+                    try:
+                        from datetime import datetime
+                        date_str = datetime.strptime(date_part, "%d%m%Y").strftime("%Y-%m-%d")
+                    except ValueError:
+                        pass
+                
+                from summarize_log import get_summary
+                summary = await get_summary(date_str, query_str)
+                reply_to = msg_data.get("to") or sender
+                await self._send_text(reply_to, f"Here is your log summary:\n\n{summary}")
                 return "ok"
             
             # For all other outgoing messages (or AI replies), ignore them.
@@ -139,7 +189,8 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
 
         # Download media if attached
         images = []
-        if msg_data.get("hasMedia") or msg_data.get("type") == "image":
+        document_text = ""
+        if msg_data.get("hasMedia") or msg_data.get("type") in ["image", "document"]:
             msg_id = msg_data.get("id")
             if isinstance(msg_id, dict):
                 msg_id = msg_id.get("id", msg_id)
@@ -148,13 +199,29 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
             headers = {"X-API-Key": OPENWA_API_KEY}
             try:
                 async with httpx.AsyncClient() as client:
-                    media_resp = await client.get(media_url, headers=headers, timeout=20.0)
+                    media_resp = await client.get(media_url, headers=headers, timeout=30.0)
                     if media_resp.status_code == 200:
-                        import base64
-                        b64 = base64.b64encode(media_resp.content).decode("utf-8")
-                        content_type = media_resp.headers.get("Content-Type", "image/jpeg")
-                        images.append({"data_uri": f"data:{content_type};base64,{b64}"})
-                        LOGGER.info("Successfully downloaded and attached media.")
+                        content_type = media_resp.headers.get("Content-Type", "")
+                        
+                        if "image" in content_type:
+                            import base64
+                            b64 = base64.b64encode(media_resp.content).decode("utf-8")
+                            images.append({"data_uri": f"data:{content_type};base64,{b64}"})
+                            LOGGER.info("Successfully downloaded and attached image media.")
+                        elif "pdf" in content_type:
+                            import fitz # PyMuPDF
+                            doc = fitz.open(stream=media_resp.content, filetype="pdf")
+                            text_pages = []
+                            for page in doc:
+                                text_pages.append(page.get_text())
+                            document_text = "\n".join(text_pages)
+                            LOGGER.info("Successfully parsed PDF document.")
+                        else:
+                            try:
+                                document_text = media_resp.content.decode("utf-8")
+                                LOGGER.info("Successfully parsed plain text document.")
+                            except Exception:
+                                LOGGER.warning(f"Unsupported document type: {content_type}")
                     else:
                         LOGGER.warning(f"Failed to download media: {media_resp.status_code}")
             except Exception as e:
@@ -164,12 +231,20 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
         contact_info = msg_data.get("contact", {})
         sender_name = contact_info.get("pushName") or contact_info.get("name") or sender
         
-        if is_group:
+        from src.langgraph_whatsapp.config import VIP_IDS
+        is_vip = sender in VIP_IDS
+
+        if is_vip:
+            user_message_text = f"[VIP MESSAGE from {sender_name}]: {content}"
+        elif is_group:
             group_info = msg_data.get("group", {})
             group_name = group_info.get("name") or group_info.get("id")
             user_message_text = f"[GROUP({group_name}) MESSAGE from {sender_name}]: {content}"
         else:
             user_message_text = f"[Message from {sender_name}]: {content}"
+
+        if document_text:
+            user_message_text += f"\n\n[ATTACHED DOCUMENT TEXT]:\n{document_text}"
 
         input_data = {
             "id": sender,

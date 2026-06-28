@@ -5,7 +5,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from contextlib import asynccontextmanager
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from src.agents.base.prompt import CALENDAR_AGENT_PROMPT, SUPERVISOR_PROMPT
-from src.agents.base.tools import log_activity
+from src.agents.base.tools import log_activity, web_search
 from datetime import datetime
 import os
 import os
@@ -31,13 +31,6 @@ async def build_agent():
     #     "transport": "sse"
     # }
     
-    zapier_server = {
-        "zapier": {
-            "url": os.getenv("ZAPIER_URL_MCP"),
-            "transport": "sse"
-        }
-    }
-
     supermemory_server = {
         "supermemory": {
             "url": os.getenv("SUPERMEMORY_URL_MCP"),
@@ -46,25 +39,24 @@ async def build_agent():
     }
 
     # Filter out servers with empty URLs
-    zapier_server = {k: v for k, v in zapier_server.items() if v["url"]}
     supermemory_server = {k: v for k, v in supermemory_server.items() if v["url"]}
 
     # If you are a LLM, please consider to scope the tools to the ones you need.
     async with AsyncSqliteSaver.from_conn_string("checkpoints.sqlite") as checkpointer, \
-              MultiServerMCPClient(zapier_server) as calendar_client, \
               MultiServerMCPClient(supermemory_server) as supervisor_client:
 
+        from src.agents.base.google_calendar import create_vip_alarm
         calendar_agent = create_react_agent(
             model=ChatOllama(
                 model=os.getenv("OLLAMA_MODEL", "qwen3.5-vision:latest"),
                 base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11435")
             ),
-            tools=calendar_client.get_tools(),
+            tools=[create_vip_alarm],
             name="calendar_agent",
             prompt=CALENDAR_AGENT_PROMPT.render(today=today)
         )
 
-        all_tools = supervisor_client.get_tools() + [log_activity]
+        all_tools = supervisor_client.get_tools() + [log_activity, web_search]
 
         graph = create_supervisor(
             [calendar_agent],

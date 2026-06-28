@@ -8,28 +8,30 @@ Unlike standard chatbots, this agent acts as a true personal assistant. It intel
 
 ## 🌟 Key Features
 
-* **🧠 Persistent Memory**: Uses `langgraph-checkpoint-sqlite` to maintain long-term conversation history for every individual contact.
-* **👁️ Vision & Multimodality**: Built-in support for `qwen3.5-vision` (via Ollama). Send an image to your WhatsApp, and the AI will download the media, analyze it, and reply intelligently.
-* **🛡️ Smart Group Chat Handling**: The agent recognizes group chats. It will silently log the contents for your reference but is strictly programmed *never* to embarrass you by auto-replying in groups.
+* **🧠 Persistent Memory & Semantic RAG**: 
+  * Uses `langgraph-checkpoint-sqlite` to maintain long-term conversation history for every contact.
+  * Silently logs activities into a local **ChromaDB** vector database. Powered by the local `nomic-embed-text` embedding model, this allows you to perform semantic searches over your history.
+* **👁️ Vision & Multimodality**: Built-in support for `qwen3.5-vision` (via Ollama). Send an image to your WhatsApp, and the AI will analyze it.
+* **🌐 Agentic Web Search**: Equipped with a DuckDuckGo web search tool, allowing the AI to autonomously browse the internet for up-to-date facts when it doesn't know the answer.
+* **🚨 VIP Google Calendar Alarms**: Specify VIP contact IDs in your `.env`. If they message you, the AI directly interfaces with the **Google Calendar API** to schedule an immediate 1-minute alarm to vibrate your phone and notify you!
+* **🛡️ Smart Group Chat Handling**: The agent recognizes group chats, silently logs the contents to ChromaDB, but strictly *never* auto-replies in groups.
 * **📱 Remote WhatsApp Control**: Control your server directly from your phone! Text yourself special commands:
-  * `AI_OFF` - Instantly pauses the AI.
-  * `AI_ON` - Resumes AI operation.
-  * `AI_LOG` - Generates and sends you a chronological, date-wise summary of everything the bot handled while you were away.
-  * `AI_DEL` - Forcefully wipes the SQLite memory database for a clean slate.
+  * `AI_OFF` / `AI_ON` - Instantly pauses or resumes the AI.
+  * `AI_LOG <query>` - Generates a summary. You can ask semantic questions like "AI_LOG what did moneycontrol say today?" and it will query the RAG system.
+  * `AI_DEL` - Forcefully wipes the memory for a clean slate.
 * **🔁 Bulletproof Resilience**:
-  * **LangGraph Retries**: If the local LLM hallucinates or gets stuck in a logic loop, LangGraph gracefully intercepts the `GraphRecursionError` and auto-retries.
-  * **Session Auto-Restart**: If the OpenWA/WAHA connection drops, the bot automatically pings the WAHA API to jumpstart the session and seamlessly retries sending the message.
-* **🔒 100% Local & Private**: All AI processing runs completely locally on your hardware via Ollama. No data is sent to OpenAI or third-party cloud providers.
+  * **LangGraph Retries**: Gracefully intercepts `GraphRecursionError` and auto-retries hallucinated tool calls.
+  * **Proactive Polling Daemon**: A background task polls the WAHA API every 60 seconds. If the WhatsApp session crashes or hangs in a "disconnected" state, it gracefully kills and revives the session.
 
 ---
 
 ## 🏗️ Architecture
 
-1. **WAHA (WhatsApp HTTP API)**: Provides the bridge to WhatsApp. Listens to incoming webhooks and handles outgoing messages.
-2. **FastAPI**: Acts as the fast, asynchronous webhook receiver for WAHA.
-3. **LangGraph**: The core brain. Acts as a supervisor agent that routes messages, decides when to use tools (like logging), and maintains state.
-4. **Ollama**: Local inference engine for fast, private AI processing.
-5. **SQLite**: Persistent database checkpointer for LangGraph memory.
+1. **WAHA (WhatsApp HTTP API)**: Bridge to WhatsApp, listening to webhooks.
+2. **FastAPI**: Asynchronous webhook receiver and background polling daemon.
+3. **LangGraph**: The core supervisor agent routing messages and orchestrating tools (Calendar, Web Search, RAG).
+4. **Ollama**: Local inference engine for fast, private AI processing & embeddings.
+5. **ChromaDB & SQLite**: Vector database for semantic RAG searches and persistent checkpointer for LangGraph state.
 
 ---
 

@@ -180,3 +180,9 @@ checkpoints.sqlite-journal
 whatsapp_activity_log.md
 openapi.json
 openapi_dump.json
+client_secret_*.json
+token.json
+
+logs.sqlite
+chroma_db/
+waha_docs.json
