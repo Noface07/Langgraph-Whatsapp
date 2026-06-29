@@ -228,9 +228,15 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
                     message_id = message_id.get("id")
                 
                 if message_id:
-                    media_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}/messages/{message_id}/download"
+                    media_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}/messages/{message_id}/media"
 
             if media_url:
+                # Rewrite media_url to use the host-accessible OPENWA_API_URL base (fixes Docker localhost:3000 / waha:3000 issues)
+                from urllib.parse import urlparse, urlunparse
+                parsed_media = urlparse(media_url)
+                parsed_api = urlparse(OPENWA_API_URL)
+                media_url = urlunparse(parsed_media._replace(scheme=parsed_api.scheme, netloc=parsed_api.netloc))
+
                 headers = {"X-API-Key": OPENWA_API_KEY}
                 try:
                     async with httpx.AsyncClient() as client:

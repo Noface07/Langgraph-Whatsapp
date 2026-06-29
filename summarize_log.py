@@ -62,12 +62,14 @@ async def get_summary(date_str: str = None, query_str: str = None) -> str:
     Crucially, organize and order the summary DATE-WISE so Yuvraj can easily see what happened chronologically.
     Identify people by their names as listed in the log. Do not use generic terms like "the user" when referring to the person who sent the message. 
     CRITICAL RULE: DO NOT assume relationships, events, or ownership. If the log says "Happy anniversary Raju and Asha", do NOT summarize it as Yuvraj's anniversary or Yuvraj's spouse. Only state exactly what is written.
+    
+    CRITICAL: Prioritize direct, personal messages from individuals (like Amay, Karan, etc.) over automated news channels (like CNBC-TV18, Moneycontrol, Times of India) or group chat chatter. Even if the personal messages are short or casual, you MUST include a summary of who reached out and what they said (e.g., "Amay reached out and had a chat..."). Do not omit personal interactions.
     """
     
     if query_str:
         base_prompt += f"\\n\\nUSER QUESTION: {query_str}\\nPlease answer the user's question based ONLY on the provided logs. Do not generate a general summary unless requested."
     else:
-        base_prompt += "\\n\\nPlease provide a concise 2-3 paragraph summary of the logs. Keep it easy to read and focus on the most important messages or events."
+        base_prompt += "\\n\\nPlease provide a concise 3-5 paragraph summary of the logs. Keep it easy to read and focus on the most important messages or events."
 
     base_prompt += f"\\n\\nHere is the raw log data for {date_str}:\\n{log_content}"
     
