@@ -6,9 +6,20 @@ from fastapi.responses import JSONResponse
 
 from src.langgraph_whatsapp.channel import WhatsAppAgentOpenWA
 
+from contextlib import asynccontextmanager
+
 LOGGER = logging.getLogger("server")
-APP = FastAPI()
 WSP_AGENT = WhatsAppAgentOpenWA()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import asyncio
+    LOGGER.info("Server starting up. Firing initial session restart to boot WAHA...")
+    asyncio.create_task(WSP_AGENT.force_restart_session())
+    asyncio.create_task(monitor_session_health())
+    yield
+
+APP = FastAPI(lifespan=lifespan)
 
 from src.langgraph_whatsapp.config import OPENWA_API_URL, OPENWA_API_KEY, OPENWA_SESSION_ID
 import httpx
@@ -32,12 +43,7 @@ async def monitor_session_health():
         except Exception as e:
             LOGGER.error(f"Error in periodic session monitor: {e}")
 
-@APP.on_event("startup")
-async def startup_event():
-    import asyncio
-    LOGGER.info("Server starting up. Firing initial session restart to boot WAHA...")
-    asyncio.create_task(WSP_AGENT.force_restart_session())
-    asyncio.create_task(monitor_session_health())
+
 
 @APP.post("/whatsapp")
 async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):

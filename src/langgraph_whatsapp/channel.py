@@ -198,6 +198,11 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
         if event_type == "message.sent":
             return "ok"
 
+        # Check if message is of type unknown, which can cause loops if empty
+        if msg_data.get("type") == "unknown":
+            LOGGER.info(f"Ignoring 'unknown' type message from {sender} to prevent loops.")
+            return "ok"
+
         # Check Bot State before processing incoming messages
         import os
         state = "on"
@@ -217,8 +222,15 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
                 media_url = msg_data["media"].get("url")
             
             if not media_url:
-                LOGGER.warning("Message has media but no media.url was provided in the webhook payload.")
-            else:
+                LOGGER.warning("Message has media but no media.url was provided in the webhook payload. Attempting fallback download endpoint.")
+                message_id = msg_data.get("id")
+                if isinstance(message_id, dict):
+                    message_id = message_id.get("id")
+                
+                if message_id:
+                    media_url = f"{OPENWA_API_URL.rstrip('/')}/sessions/{OPENWA_SESSION_ID}/messages/{message_id}/download"
+
+            if media_url:
                 headers = {"X-API-Key": OPENWA_API_KEY}
                 try:
                     async with httpx.AsyncClient() as client:
@@ -249,6 +261,10 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
                         LOGGER.warning(f"Failed to download media: {media_resp.status_code}")
                 except Exception as e:
                     LOGGER.error(f"Error downloading media: {e}")
+
+        if not content and not images and not document_text:
+            LOGGER.info(f"Ignoring message with empty content and no media from {sender} to prevent loops.")
+            return "ok"
 
         # Assemble payload for the LangGraph agent
         contact_info = msg_data.get("contact", {})
