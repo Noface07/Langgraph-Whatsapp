@@ -285,6 +285,12 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
         if document_text:
             user_message_text += f"\n\n[ATTACHED DOCUMENT TEXT]:\n{document_text}"
 
+        try:
+            from src.agents.base.tools import do_log_activity
+            do_log_activity(f"Incoming message: {user_message_text}")
+        except Exception as e:
+            LOGGER.error(f"Failed to auto-log incoming message: {e}")
+
         if state == "off":
             user_message_text += "\n\n[SYSTEM INSTRUCTION]: The bot is currently PAUSED. You are in SILENT LISTENER mode. DO NOT use google_calendar or web_search tools. Your ONLY job is to use the log_activity tool to record this."
 

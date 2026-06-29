@@ -18,9 +18,7 @@ def _init_db():
     conn.commit()
     conn.close()
 
-@tool
-def log_activity(summary: str) -> str:
-    """Logs an activity summary to a local SQLite database so the user can review it later. Use this tool to save important messages or interaction summaries."""
+def do_log_activity(summary: str) -> str:
     _init_db()
     
     now = datetime.now()
@@ -62,6 +60,11 @@ def log_activity(summary: str) -> str:
         return "Activity logged successfully."
     except Exception as e:
         return f"Failed to log activity: {str(e)}"
+
+@tool
+def log_activity(summary: str) -> str:
+    """Logs an activity summary to a local SQLite database so the user can review it later. Use this tool to save important messages or interaction summaries."""
+    return do_log_activity(summary)
 
 @tool
 def web_search(query: str) -> str:
