@@ -277,7 +277,13 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
         sender_name = contact_info.get("pushName") or contact_info.get("name") or sender
         
         from src.langgraph_whatsapp.config import VIP_IDS
-        is_vip = sender in VIP_IDS
+        
+        actual_sender_id = msg_data.get("author") or sender
+        def _get_base_id(full_id):
+            return str(full_id).split('@')[0]
+            
+        clean_vips = [_get_base_id(v) for v in VIP_IDS]
+        is_vip = _get_base_id(actual_sender_id) in clean_vips
 
         if is_vip:
             user_message_text = f"[VIP MESSAGE from {sender_name}]: {content}"
@@ -296,6 +302,20 @@ class WhatsAppAgentOpenWA(WhatsAppAgent):
             do_log_activity(f"Incoming message: {user_message_text}")
         except Exception as e:
             LOGGER.error(f"Failed to auto-log incoming message: {e}")
+
+        # If the message is from before the server started, skip agent processing
+        msg_timestamp = msg_data.get("timestamp")
+        if msg_timestamp:
+            try:
+                msg_ts = float(msg_timestamp)
+                if msg_ts > 1e11:
+                    msg_ts /= 1000.0
+                from src.langgraph_whatsapp.config import STARTUP_TIME
+                if msg_ts < STARTUP_TIME:
+                    LOGGER.info(f"Old message from {sender} was logged but will not be processed or replied to.")
+                    return "ok"
+            except (ValueError, TypeError):
+                pass
 
         if state == "off":
             user_message_text += "\n\n[SYSTEM INSTRUCTION]: The bot is currently PAUSED. You are in SILENT LISTENER mode. DO NOT use google_calendar or web_search tools. Your ONLY job is to use the log_activity tool to record this."
